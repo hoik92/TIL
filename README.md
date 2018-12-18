@@ -12,6 +12,7 @@
    git init
    git status
    ```
+git 생성
 
 3. ```
    git add README.md
@@ -19,3 +20,9 @@
    git remote add origin https://github.com/hoik92/TIL.git
    git push origin master
    ```
+git commit, push
+
+4. ```
+   git remote remove origin
+   ```
+git push 경로가 잘못된 경우 경로 삭제
