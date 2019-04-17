@@ -134,6 +134,70 @@ class Post(models.Model):
 
 
 
+## 좋아요 기능(user와 post의 M:N 매칭)
+
+* posts/models.py
+  * Post 모델에 like_users ManyToManyField 생성
+
+```python
+...
+class Post(models.Model):
+	...
+	like_users = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name="like_posts", blank=True)
+```
+
+* posts/urls.py
+  * 좋아요 버튼 누를 경우 동작할 url
+
+```python
+...
+urlpatterns = [
+    ...
+    path('<int:post_id>/like/', views.like, name="like"),
+]
+```
+
+* posts/views.py
+  * 좋아요 버튼 누를 경우 동작할 메소드
+
+```python
+from django.contrib.auth.decorators import login_required
+...
+
+@login_required
+def like(request, post_id):
+    post = get_object_or_404(Post, id=post_id)
+    if request.user in post.like_users.all():
+        post.like_users.remove(request.user)
+    else:
+        post.like_users.add(request.user)
+    return redirect('posts:list')
+```
+
+* posts/templates/posts/list.html
+  * 좋아요 버튼 등 추가
+
+```html
+...
+<div class="card-body">
+  <a href="{% url 'posts:like' post.id %}">
+    <!-- 해당 유저가 like를 했으면 -->
+    {% if user in post.like_users.all %}
+      <i class="fas fa-heart"></i>
+    <!-- 아니면 -->
+    {% else %}
+      <i class="far fa-heart"></i>
+    {% endif %}
+  </a>
+  <p class="card-text">
+    {{ post.like_users.count }}명이 좋아합니다.
+  </p>
+</div>
+...
+```
+
+
+
 ## 댓글 기능
 
 * posts/models.py
