@@ -452,3 +452,211 @@ def password(request):
 
 
 
+## user와 profile의 1:1 매칭
+
+* accounts/models.py
+  * Profile 모델
+
+```python
+...
+class Profile(models.Model):
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    description = models.TextField(blank=True)
+    nickname = models.CharField(max_length=40, blank=True)
+```
+
+* accounts/forms.py
+  * ProfileForm 생성
+
+```python
+from .models import Profile
+...
+class ProfileForm(forms.ModelForm):
+    class Meta:
+        model = Profile
+        fields = ('description', 'nickname')
+```
+
+* accounts/views.py
+  * update에 ProfileForm 추가
+
+```python
+from .forms import ProfileForm
+...
+def update(request):
+	if request.method == "POST":
+		user_change_form = CustomUserChangeForm(request.POST, instance=request.user)
+		profile_form = ProfileForm(request.POST, instance=request.user.profile)
+		if user_change_form.is_valid() and profile_form.is_valid():
+			user = user_change_form.save()
+			profile_form.save()
+			return redirect('people', user.username)
+	else:
+		user_change_form = CustomUserChangeForm()
+		profile, created = Profile.objects.get_or_create(user=request.user)
+		profile_form = ProfileForm()
+		context = {
+            'user_change_form': user_change_form,
+            'profile_form': profile_form,
+		}
+		return render(request, 'accounts/update.html', context)
+```
+
+* accounts/templates/accounts/update.html
+  * profile_form 추가
+
+```html
+...
+<form method="POST">
+  ...
+  {% bootstrap_form user_change_form %}
+  {% bootstrap_form profile_form %}
+  ...
+```
+
+
+
+## 팔로우 기능
+
+* accounts/models.py
+  * django의 User모델을 상속받아 재정의
+
+```python
+from django.contrib.auth.models import AbstractUser
+...
+class User(AbstractUser):
+    follows = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name="followers")
+```
+
+* accounts/urls.py
+  * 팔로우 할 경우 url
+
+```python
+...
+urlpatterns = [
+    ...
+    path('<int:user_id>/follow/', views.follow, name="follow"),
+]
+```
+
+* accounts/views.py
+  * 팔로우 기능 구현
+
+```python
+...
+def follow(request, user_id):
+    person = get_object_or_404(get_user_model(), id=user_id)
+    
+    if request.user != person:
+    # 현재 유저가 해당 유저를 팔로우하고 있었으면
+        if request.user in person.followers.all():
+        # 언팔로우
+            person.followers.remove(request.user)
+        # 아니면
+        else:
+        # 팔로우
+            person.followers.add(request.user)
+    return redirect('people', person.username)
+```
+
+* accounts/templates/accounts/people.html
+  * 팔로우 버튼 추가
+
+```html
+<h1>{{ person.username }}
+  {% if user != person %}
+    <!-- 만약 현재 접속한 유저가 해당 페이지의 유저를 팔로우 한 경우 -->
+    {% if user in person.followers.all %}
+      <a class="btn btn-outline-primary ml-3" href="{% url 'accounts:follow' person.id %}">
+        언팔로우
+      </a>
+    {% else %}
+      <a class="btn btn-primary ml-3" href="{% url 'accounts:follow' person.id %}">
+        팔로우
+      </a>
+    {% endif %}
+  {% endif %}
+</h1>
+```
+
+
+
+## 팔로우한 사람의 Post만 보기
+
+* posts/views.py
+  * list 페이지 수정
+
+```python
+from django.db.models.query_utils import Q
+...
+@login_required
+def list(request):
+    posts = Post.objects.filter(Q(user_id__in=request.user.follows.all()) | Q(user_id=request.user))
+    print(posts.query)
+    form = CommentForm()
+    return render(request, 'posts/list.html', {'posts': posts, 'form': form})
+```
+
+
+
+## 프로필 사진 업로드
+
+* accounts/models.py
+  * Profile 모델에 ImageField 추가
+
+```python
+...
+class Profile(models.Model):
+	...
+	image = models.ImageField(blank=True)
+```
+
+* accounts/forms.py
+  * ProfileForm이 보여줄 필드에 image 필드 추가
+
+```python
+...
+class ProfileForm(forms.ModelForm):
+	class Meta:
+		model = Profile
+		fields = ('description', 'nickname', 'image',)
+```
+
+* accounts/views.py
+  * 이미지 파일을 받아 DB에 저장
+
+```python
+...
+def update(request):
+    if request.method == "POST":
+		...
+		profile_form = ProfileForm(request.POST, request.FILES, instance=request.user.profile)
+		...
+```
+
+* accounts/templates/accounts/update.html
+  * 이미지 파일을 추가하기 위해 enctype 설정
+
+```html
+...
+<form method="POST" enctype="multipart/form-data">
+  ...
+```
+
+* accounts/templates/accounts/people.html
+  * 프로필 사진을 보여줌
+
+```html
+{% extends 'base.html' %}
+
+{% block body %}
+<div class="container">
+  <div class="row mb-5">
+    <div class="col-4 d-flex">
+      <div class="col-12 d-flex justify-content-center align-items-center">
+        <img src={% if person.profile.image %}"{{ person.profile.image.url }}"{% else %}"https://i.stack.imgur.com/34AD2.jpg"{% endif %} width="150rem" style="border-radius: 50%; image-size: contain;" alt="">
+      </div>
+    </div>
+  ...
+```
+
