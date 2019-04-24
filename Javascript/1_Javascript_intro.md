@@ -267,3 +267,17 @@ const someTony = users.some(function(user){
 console.log(someTony)
 ```
 
+
+
+## 8. Primitive/Reference type
+
+### (1) Primitive type
+
+* String
+* Number
+* Boolean
+
+### (2) Reference type
+
+* Array
+* Object
